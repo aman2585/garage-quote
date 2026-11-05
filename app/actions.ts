@@ -14,6 +14,7 @@ import {
 } from "@/lib/quotes";
 import { editorPayloadSchema, garageProfileSchema, priceItemFormSchema, signupSchema, statusSchema } from "@/lib/schemas";
 import { rupeesToPaise } from "@/lib/money";
+import { SAMPLE_PRICES } from "@/lib/sample-prices";
 
 export type FormState = { error?: string } | undefined;
 
@@ -77,6 +78,12 @@ export async function addPriceItemAction(_: FormState, form: FormData): Promise<
   ]);
   revalidatePath("/prices");
   return {};
+}
+
+export async function loadSamplePricesAction() {
+  const g = await requireGarage();
+  await upsertPriceItems(g.id, SAMPLE_PRICES);
+  revalidatePath("/prices");
 }
 
 export async function updatePriceItemAction(form: FormData) {

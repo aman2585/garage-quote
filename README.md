@@ -23,6 +23,14 @@ npm install
 DATABASE_URL=postgres://... npm run dev
 ```
 
+## Try it (reviewers)
+Live app: https://garage-quote-98r3.vercel.app. The test login (email and password) is in the submission form, not in this repository.
+1. Log in. On **Price list**, click **Add 9 sample prices** (they are samples, not market data).
+2. On the **Quotes** page, copy **your MCP link**.
+3. In Claude (Pro, Max, Team or Enterprise): **Customize → Connectors → Add custom connector**. Name `GarageQuote`, paste the link, leave sign-in empty, **Add**.
+4. Open a **new chat**, enable GarageQuote from the **+** menu, and send: *Customer Ravi, 2017 Swift petrol, front brake noise, also wants an AC service. Make a quote.*
+5. Watch the quote appear on the Quotes page, edit a price, **Mark as sent**, then open the customer link and **Accept**.
+
 ## Connect Claude
 1. Sign up in the app. The dashboard shows your private MCP link: `https://<app>/api/g/<secret>/mcp`.
 2. In Claude: **Customize → Connectors → Add custom connector**, paste the link, leave sign-in empty, click **Add**.

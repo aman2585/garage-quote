@@ -1,6 +1,6 @@
 import { requireGarage } from "@/lib/auth";
 import { listPriceItems } from "@/lib/quotes";
-import { updatePriceItemAction } from "@/app/actions";
+import { loadSamplePricesAction, updatePriceItemAction } from "@/app/actions";
 import { AddPriceItemForm } from "./AddPriceItemForm";
 
 export default async function PricesPage() {
@@ -22,7 +22,14 @@ export default async function PricesPage() {
       </section>
 
       <section className="card divide-y divide-line">
-        {items.length === 0 && <p className="p-6 text-center text-sm text-muted">No items yet.</p>}
+        {items.length === 0 && (
+          <div className="space-y-3 p-6 text-center text-sm text-muted">
+            <p>No items yet. Add your own above, or start with a set of sample prices to try the app.</p>
+            <form action={loadSamplePricesAction}>
+              <button className="btn-ghost">Add 9 sample prices (edit them anytime)</button>
+            </form>
+          </div>
+        )}
         {items.map((it) => (
           <form key={it.id} action={updatePriceItemAction} className="flex flex-wrap items-center gap-2 px-4 py-3">
             <input type="hidden" name="id" value={it.id} />
