@@ -37,3 +37,9 @@ export const priceItemFormSchema = z.object({
   kind: kindSchema,
   price_rupees: z.coerce.number().min(0).max(1_000_000),
 });
+
+export const garageProfileSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  city: z.string().trim().max(60).optional(),
+  phone: z.string().trim().max(20).optional(),
+});

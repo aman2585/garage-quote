@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <nav className="flex gap-4 text-sm">
             <Link href="/dashboard" className="hover:text-brand">Quotes</Link>
             <Link href="/prices" className="hover:text-brand">Price list</Link>
+            <Link href="/settings" className="hover:text-brand">Settings</Link>
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm text-muted">
             <span className="hidden sm:inline">{g.name}</span>

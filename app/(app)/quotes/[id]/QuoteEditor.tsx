@@ -56,6 +56,7 @@ export function QuoteEditor({
   const [notes, setNotes] = useState(quote.notes ?? "");
   const [lines, setLines] = useState<EditLine[]>(quote.lines.map(toEdit));
   const [dirty, setDirty] = useState(false);
+  const locked = quote.status === "accepted";
 
   const update = (key: string, patch: Partial<EditLine>) => {
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -130,19 +131,19 @@ export function QuoteEditor({
       <section className="card grid gap-4 p-5 sm:grid-cols-2">
         <div>
           <label className="label">Customer name</label>
-          <input className="input" value={customer} onChange={(e) => { setCustomer(e.target.value); setDirty(true); }} />
+          <input className="input" disabled={locked} value={customer} onChange={(e) => { setCustomer(e.target.value); setDirty(true); }} />
         </div>
         <div>
           <label className="label">Customer phone</label>
-          <input className="input" inputMode="tel" value={phone} onChange={(e) => { setPhone(e.target.value); setDirty(true); }} />
+          <input className="input" inputMode="tel" disabled={locked} value={phone} onChange={(e) => { setPhone(e.target.value); setDirty(true); }} />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Vehicle</label>
-          <input className="input" value={vehicle} onChange={(e) => { setVehicle(e.target.value); setDirty(true); }} />
+          <input className="input" disabled={locked} value={vehicle} onChange={(e) => { setVehicle(e.target.value); setDirty(true); }} />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Notes for the customer</label>
-          <textarea className="input min-h-20" value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }} />
+          <textarea className="input min-h-20" disabled={locked} value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }} />
         </div>
       </section>
 
@@ -162,36 +163,36 @@ export function QuoteEditor({
             {lines.map((l) => (
               <tr key={l.key} className={l.price_item_id ? "" : "bg-amber-50/60"}>
                 <td className="px-3 py-2">
-                  <input className="input" value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} />
-                  {!l.price_item_id && (
+                  <input className="input" disabled={locked} value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} />
+                  {!l.price_item_id && !locked && (
                     <span className="mt-1 block text-xs text-amber-800">Not in your price list: check the price</span>
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <select className="input" value={l.kind} onChange={(e) => update(l.key, { kind: e.target.value as Kind })}>
+                  <select className="input" disabled={locked} value={l.kind} onChange={(e) => update(l.key, { kind: e.target.value as Kind })}>
                     <option value="part">Part</option>
                     <option value="labour">Labour</option>
                     <option value="service">Service</option>
                   </select>
                 </td>
                 <td className="px-3 py-2">
-                  <input className="input tabular-nums" inputMode="decimal" value={l.qty} onChange={(e) => update(l.key, { qty: e.target.value })} />
+                  <input className="input tabular-nums" inputMode="decimal" disabled={locked} value={l.qty} onChange={(e) => update(l.key, { qty: e.target.value })} />
                 </td>
                 <td className="px-3 py-2">
-                  <input className="input tabular-nums" inputMode="decimal" value={l.price_rupees} onChange={(e) => update(l.key, { price_rupees: e.target.value })} />
+                  <input className="input tabular-nums" inputMode="decimal" disabled={locked} value={l.price_rupees} onChange={(e) => update(l.key, { price_rupees: e.target.value })} />
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {formatPaise(lineTotalPaise(Number(l.qty) || 0, Math.round((Number(l.price_rupees) || 0) * 100)))}
                 </td>
                 <td className="px-2 py-2">
-                  <button
+                  {!locked && <button
                     type="button"
                     aria-label="Remove line"
                     className="rounded p-1 text-muted hover:bg-stone-100 hover:text-red-700"
                     onClick={() => { setLines((ls) => ls.filter((x) => x.key !== l.key)); setDirty(true); }}
                   >
                     ✕
-                  </button>
+                  </button>}
                 </td>
               </tr>
             ))}
@@ -199,7 +200,7 @@ export function QuoteEditor({
           <tfoot>
             <tr className="border-t border-line">
               <td colSpan={4} className="px-3 py-3">
-                <div className="flex flex-wrap gap-2">
+                {!locked && <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="btn-ghost"
@@ -218,7 +219,7 @@ export function QuoteEditor({
                       ))}
                     </select>
                   )}
-                </div>
+                </div>}
               </td>
               <td className="px-3 py-3 text-right text-base font-bold tabular-nums">{formatPaise(total)}</td>
               <td />
@@ -228,9 +229,15 @@ export function QuoteEditor({
       </section>
 
       <section className="flex flex-wrap items-center gap-3">
-        <button className="btn-primary" disabled={pending || !dirty} onClick={() => void save()}>
-          {pending ? "Saving…" : dirty ? "Save changes" : "Saved"}
-        </button>
+        {locked ? (
+          <p className="text-sm text-muted">
+            The customer accepted this quote, so it is locked. To change something, create a new quote.
+          </p>
+        ) : (
+          <button className="btn-primary" disabled={pending || !dirty} onClick={() => void save()}>
+            {pending ? "Saving…" : dirty ? "Save changes" : "Saved"}
+          </button>
+        )}
         {quote.status === "draft" && (
           <button className="btn-ghost" disabled={pending} onClick={markSent}>Mark as sent</button>
         )}

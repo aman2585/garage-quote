@@ -52,6 +52,11 @@ create table if not exists quotes (
   updated_at timestamptz not null default now()
 );
 create index if not exists quotes_garage_created on quotes (garage_id, created_at desc);
+alter table quotes add column if not exists number integer;
+update quotes q set number = s.n
+  from (select id, row_number() over (partition by garage_id order by seq) as n from quotes where number is null) s
+  where q.id = s.id and q.number is null;
+create unique index if not exists quotes_garage_number on quotes (garage_id, number);
 create table if not exists quote_lines (
   id uuid primary key default gen_random_uuid(),
   quote_id uuid not null references quotes(id) on delete cascade,

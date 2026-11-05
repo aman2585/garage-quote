@@ -7,11 +7,12 @@ import { endSession, hashPassword, newSecret, requireGarage, startSession, verif
 import {
   acceptPublicQuote,
   createQuote,
+  QuoteLockedError,
   updatePriceItem,
   updateQuote,
   upsertPriceItems,
 } from "@/lib/quotes";
-import { editorPayloadSchema, priceItemFormSchema, signupSchema, statusSchema } from "@/lib/schemas";
+import { editorPayloadSchema, garageProfileSchema, priceItemFormSchema, signupSchema, statusSchema } from "@/lib/schemas";
 import { rupeesToPaise } from "@/lib/money";
 
 export type FormState = { error?: string } | undefined;
@@ -54,6 +55,17 @@ export async function regenerateSecretAction() {
   revalidatePath("/dashboard");
 }
 
+export async function updateGarageAction(_: FormState, form: FormData): Promise<FormState> {
+  const g = await requireGarage();
+  const parsed = garageProfileSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: "Enter a garage name of at least 2 characters." };
+  const { name, city, phone } = parsed.data;
+  const sql = await db();
+  await sql`update garages set name = ${name}, city = ${city || null}, phone = ${phone || null} where id = ${g.id}`;
+  revalidatePath("/", "layout");
+  return {};
+}
+
 // ---------- price list ----------
 
 export async function addPriceItemAction(_: FormState, form: FormData): Promise<FormState> {
@@ -94,7 +106,13 @@ export async function saveQuoteAction(quoteId: string, payload: unknown): Promis
   const parsed = editorPayloadSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: "Some fields are invalid: every line needs a description, qty above 0 and a price." };
   const { lines, ...fields } = parsed.data;
-  const q = await updateQuote(g.id, quoteId, fields, lines);
+  let q;
+  try {
+    q = await updateQuote(g.id, quoteId, fields, lines);
+  } catch (e) {
+    if (e instanceof QuoteLockedError) return { ok: false, error: e.message };
+    throw e;
+  }
   if (!q) return { ok: false, error: "Quote not found." };
   revalidatePath(`/quotes/${quoteId}`);
   revalidatePath("/dashboard");
@@ -104,7 +122,11 @@ export async function saveQuoteAction(quoteId: string, payload: unknown): Promis
 export async function setQuoteStatusAction(quoteId: string, status: string) {
   const g = await requireGarage();
   const s = statusSchema.parse(status);
-  await updateQuote(g.id, quoteId, { status: s });
+  try {
+    await updateQuote(g.id, quoteId, { status: s });
+  } catch (e) {
+    if (!(e instanceof QuoteLockedError)) throw e;
+  }
   revalidatePath(`/quotes/${quoteId}`);
   revalidatePath("/dashboard");
 }

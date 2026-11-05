@@ -32,7 +32,8 @@ export type QuoteLine = LineInput & { id: string; position: number; price_item_i
 
 export type Quote = {
   id: string;
-  seq: number;
+  seq: number; // the per-garage quote number shown as Q-<seq> (column `number`)
+  number: number;
   public_id: string;
   customer_name: string;
   customer_phone: string | null;
@@ -49,6 +50,12 @@ export type Quote = {
 export type QuoteWithLines = Quote & { lines: QuoteLine[]; total_paise: number };
 
 export const MAX_LINES = 50;
+
+export class QuoteLockedError extends Error {
+  constructor() {
+    super("This quote was accepted by the customer, so it can't be changed. Create a new quote instead.");
+  }
+}
 
 function totalOf(lines: { qty: number; unit_price_paise: number }[]): number {
   return lines.reduce((sum, l) => sum + lineTotalPaise(l.qty, l.unit_price_paise), 0);
@@ -136,9 +143,12 @@ export async function createQuote(
   const sql = await db();
   const publicId = randomBytes(16).toString("base64url");
   const id = await sql.begin(async (tx) => {
+    // One quote at a time per garage, so the per-garage number never repeats.
+    await tx`select pg_advisory_xact_lock(hashtext(${garageId}::text))`;
     const [q] = await tx<{ id: string }[]>`
-      insert into quotes (garage_id, public_id, customer_name, customer_phone, vehicle, notes, created_by)
-      values (${garageId}, ${publicId}, ${fields.customer_name.trim()}, ${fields.customer_phone?.trim() || null},
+      insert into quotes (garage_id, number, public_id, customer_name, customer_phone, vehicle, notes, created_by)
+      values (${garageId}, (select coalesce(max(number), 0) + 1 from quotes where garage_id = ${garageId}),
+              ${publicId}, ${fields.customer_name.trim()}, ${fields.customer_phone?.trim() || null},
               ${fields.vehicle.trim()}, ${fields.notes?.trim() || null}, ${createdBy})
       returning id`;
     await writeLines(tx as unknown as Awaited<ReturnType<typeof db>>, garageId, q.id, lines);
@@ -156,9 +166,10 @@ export async function updateQuote(
   if (!UUID.test(quoteId)) return null;
   const sql = await db();
   const ok = await sql.begin(async (tx) => {
-    const [existing] = await tx<{ id: string }[]>`
-      select id from quotes where id = ${quoteId} and garage_id = ${garageId} for update`;
+    const [existing] = await tx<{ id: string; status: Status }[]>`
+      select id, status from quotes where id = ${quoteId} and garage_id = ${garageId} for update`;
     if (!existing) return false;
+    if (existing.status === "accepted") throw new QuoteLockedError();
     const set: Record<string, unknown> = {};
     if (fields.customer_name !== undefined) set.customer_name = fields.customer_name.trim();
     if (fields.customer_phone !== undefined) set.customer_phone = fields.customer_phone?.trim() || null;
@@ -190,18 +201,18 @@ export async function getQuote(garageId: string, quoteId: string): Promise<Quote
   const [q] = await sql<Quote[]>`select * from quotes where id = ${quoteId} and garage_id = ${garageId}`;
   if (!q) return null;
   const lines = await linesFor(q.id);
-  return { ...q, seq: Number(q.seq), lines, total_paise: totalOf(lines) };
+  return { ...q, seq: Number(q.number), lines, total_paise: totalOf(lines) };
 }
 
 // Accepts a quote's uuid or its human number ("Q-12" or "12") and returns the uuid.
 export async function resolveQuoteRef(garageId: string, ref: string): Promise<string | null> {
   const r = ref.trim();
   if (UUID.test(r)) return r;
-  const m = r.match(/^(?:q-?)?(\d{1,12})$/i);
+  const m = r.match(/^(?:q-?)?(\d{1,9})$/i);
   if (!m) return null;
   const sql = await db();
   const [row] = await sql<{ id: string }[]>`
-    select id from quotes where garage_id = ${garageId} and seq = ${m[1]}`;
+    select id from quotes where garage_id = ${garageId} and number = ${Number(m[1])}`;
   return row?.id ?? null;
 }
 
@@ -219,7 +230,7 @@ export async function listQuotes(garageId: string, status?: Status, limit = 50):
     limit ${Math.min(Math.max(limit, 1), 100)}`;
   return rows.map((r) => ({
     ...r,
-    seq: Number(r.seq),
+    seq: Number(r.number),
     total_paise: Number(r.total_paise ?? 0),
     line_count: Number(r.line_count),
   }));
@@ -236,7 +247,7 @@ export async function getPublicQuote(publicId: string): Promise<PublicQuote | nu
     where q.public_id = ${publicId}`;
   if (!q) return null;
   const lines = await linesFor(q.id);
-  return { ...q, seq: Number(q.seq), lines, total_paise: totalOf(lines) };
+  return { ...q, seq: Number(q.number), lines, total_paise: totalOf(lines) };
 }
 
 export async function acceptPublicQuote(publicId: string, name: string | null): Promise<boolean> {
