@@ -193,6 +193,18 @@ export async function getQuote(garageId: string, quoteId: string): Promise<Quote
   return { ...q, seq: Number(q.seq), lines, total_paise: totalOf(lines) };
 }
 
+// Accepts a quote's uuid or its human number ("Q-12" or "12") and returns the uuid.
+export async function resolveQuoteRef(garageId: string, ref: string): Promise<string | null> {
+  const r = ref.trim();
+  if (UUID.test(r)) return r;
+  const m = r.match(/^(?:q-?)?(\d{1,12})$/i);
+  if (!m) return null;
+  const sql = await db();
+  const [row] = await sql<{ id: string }[]>`
+    select id from quotes where garage_id = ${garageId} and seq = ${m[1]}`;
+  return row?.id ?? null;
+}
+
 export type QuoteSummary = Quote & { total_paise: number; line_count: number };
 
 export async function listQuotes(garageId: string, status?: Status, limit = 50): Promise<QuoteSummary[]> {
