@@ -13,15 +13,14 @@ Next.js 16 (App Router) on Vercel, Postgres (Neon), `mcp-handler` for the MCP en
 ## Environment variables
 | Name | What |
 |---|---|
-| `DATABASE_URL` | Postgres connection string (Neon pooled URL) |
-| `SESSION_SECRET` | Random string, 32+ characters, used to sign login cookies |
+| `DATABASE_URL` | Postgres connection string (Neon pooled URL; added automatically by the Vercel Neon integration) |
 
-There are no other variables.
+That is the only variable the app needs. The key that signs login cookies is generated on first run and stored in the database (`SESSION_SECRET`, if set, overrides it).
 
 ## Run locally
 ```bash
 npm install
-DATABASE_URL=postgres://... SESSION_SECRET=$(openssl rand -hex 32) npm run dev
+DATABASE_URL=postgres://... npm run dev
 ```
 
 ## Connect Claude

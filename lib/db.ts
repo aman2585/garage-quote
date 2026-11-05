@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 
 // One connection pool per server instance. Neon's pooled URL runs PgBouncer in
@@ -62,6 +63,10 @@ create table if not exists quote_lines (
   price_item_id uuid references price_items(id) on delete set null
 );
 create index if not exists quote_lines_quote on quote_lines (quote_id, position);
+create table if not exists app_settings (
+  key text primary key,
+  value text not null
+);
 `;
 
 // Creates tables on first use, so a fresh Neon database needs no manual setup.
@@ -75,4 +80,27 @@ export async function db(): Promise<postgres.Sql> {
   }
   await globalForDb._schema;
   return sql;
+}
+
+// Key used to sign login cookies. Generated once, stored in the database, so
+// deployment needs no secret other than DATABASE_URL. SESSION_SECRET, if set,
+// takes priority.
+const globalKey = globalThis as unknown as { _sessionKey?: Promise<string> };
+
+export function sessionKey(): Promise<string> {
+  const fromEnv = process.env.SESSION_SECRET;
+  if (fromEnv && fromEnv.length >= 32) return Promise.resolve(fromEnv);
+  if (!globalKey._sessionKey) {
+    globalKey._sessionKey = (async () => {
+      const sql = await db();
+      const fresh = randomBytes(32).toString("hex");
+      await sql`insert into app_settings (key, value) values ('session_key', ${fresh}) on conflict (key) do nothing`;
+      const [row] = await sql<{ value: string }[]>`select value from app_settings where key = 'session_key'`;
+      return row.value;
+    })().catch((e) => {
+      globalKey._sessionKey = undefined;
+      throw e;
+    });
+  }
+  return globalKey._sessionKey;
 }

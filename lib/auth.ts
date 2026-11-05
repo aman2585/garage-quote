@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "./db";
+import { db, sessionKey } from "./db";
 
 const COOKIE = "gq_session";
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -33,20 +33,14 @@ export function verifyPassword(password: string, stored: string): boolean {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function sessionSecret(): string {
-  const s = process.env.SESSION_SECRET;
-  if (!s || s.length < 32) throw new Error("SESSION_SECRET must be set (32+ characters)");
-  return s;
-}
-
-function sign(value: string): string {
-  return createHmac("sha256", sessionSecret()).update(value).digest("base64url");
+async function sign(value: string): Promise<string> {
+  return createHmac("sha256", await sessionKey()).update(value).digest("base64url");
 }
 
 export async function startSession(garageId: string) {
   const expires = Math.floor(Date.now() / 1000) + MAX_AGE;
   const value = `${garageId}.${expires}`;
-  (await cookies()).set(COOKIE, `${value}.${sign(value)}`, {
+  (await cookies()).set(COOKIE, `${value}.${await sign(value)}`, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -65,7 +59,7 @@ export async function currentGarage(): Promise<Garage | null> {
   const parts = raw.split(".");
   if (parts.length !== 3) return null;
   const [id, exp, mac] = parts;
-  const expected = Buffer.from(sign(`${id}.${exp}`));
+  const expected = Buffer.from(await sign(`${id}.${exp}`));
   const given = Buffer.from(mac);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   if (Number(exp) < Date.now() / 1000) return null;
